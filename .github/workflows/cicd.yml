@@ -27,7 +27,7 @@ jobs:
           Write-Host "Verificando instalação do .NET..."
           dotnet --version
           dotnet --list-sdks
-          Write-Host "✅ .NET está disponível!"
+          Write-Host ".NET está disponível!"
 
       - name: Restaurar dependências
         run: dotnet restore "${{ env.PROJECT_PATH }}"
@@ -66,11 +66,11 @@ jobs:
           $destPath = "${{ env.SERVICE_PATH }}"
 
           if (-not (Test-Path $destPath)) {
-            Write-Host "📁 Criando diretório: $destPath"
+            Write-Host "Criando diretório: $destPath"
             New-Item -ItemType Directory -Path $destPath -Force | Out-Null
-            Write-Host "✅ Diretório criado!"
+            Write-Host "Diretório criado!"
           } else {
-            Write-Host "✅ Diretório já existe: $destPath"
+            Write-Host "Diretório já existe: $destPath"
           }
 
       - name: Verificar se serviço existe
@@ -78,30 +78,30 @@ jobs:
         run: |
           $service = Get-Service -Name "${{ env.SERVICE_NAME }}" -ErrorAction SilentlyContinue
           if ($service) {
-            Write-Host "✅ Serviço '${{ env.SERVICE_NAME }}' encontrado!"
+            Write-Host "Serviço '${{ env.SERVICE_NAME }}' encontrado!"
             Write-Host "Status atual: $($service.Status)"
             echo "SERVICE_EXISTS=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "⚠️ Serviço '${{ env.SERVICE_NAME }}' não existe"
-            Write-Host "📝 Será criado automaticamente..."
+            Write-Host "Serviço '${{ env.SERVICE_NAME }}' não existe"
+            Write-Host "Será criado automaticamente..."
             echo "SERVICE_EXISTS=false" >> $env:GITHUB_OUTPUT
           }
 
       - name: Parar serviço (se existir)
         if: steps.check-service.outputs.SERVICE_EXISTS == 'true'
         run: |
-          Write-Host "⏹️ Parando serviço ${{ env.SERVICE_NAME }}..."
+          Write-Host "Parando serviço ${{ env.SERVICE_NAME }}..."
           Stop-Service -Name "${{ env.SERVICE_NAME }}" -Force
           Start-Sleep -Seconds 5
-          Write-Host "✅ Serviço parado!"
+          Write-Host "Serviço parado!"
 
       - name: Copiar arquivos para diretório de produção
         run: |
           $destPath = "${{ env.SERVICE_PATH }}"
 
-          Write-Host "📦 Copiando arquivos para $destPath..."
+          Write-Host "Copiando arquivos para $destPath..."
           Copy-Item -Path "${{ env.PUBLISH_PATH }}\*" -Destination $destPath -Recurse -Force
-          Write-Host "✅ Arquivos copiados com sucesso!"
+          Write-Host "Arquivos copiados com sucesso!"
 
       - name: Criar serviço Windows (se não existir)
         if: steps.check-service.outputs.SERVICE_EXISTS == 'false'
@@ -109,7 +109,7 @@ jobs:
           $serviceName = "${{ env.SERVICE_NAME }}"
           $exePath = "${{ env.SERVICE_PATH }}\WorkerServiceTest.exe"
 
-          Write-Host "🔧 Criando serviço Windows..."
+          Write-Host "Criando serviço Windows..."
           Write-Host "Nome: $serviceName"
           Write-Host "Executável: $exePath"
 
@@ -122,9 +122,9 @@ jobs:
               -StartupType Automatic `
               -ErrorAction Stop
             
-            Write-Host "✅ Serviço criado com sucesso!"
+            Write-Host "Serviço criado com sucesso!"
           } catch {
-            Write-Host "❌ Erro ao criar o serviço:" -ForegroundColor Red
+            Write-Host "Erro ao criar o serviço:" -ForegroundColor Red
             Write-Host $_.Exception.Message -ForegroundColor Red
             Write-Host ""
             Write-Host "Verifique se o runner tem permissões de administrador" -ForegroundColor Yellow
@@ -133,7 +133,7 @@ jobs:
 
       - name: Iniciar serviço
         run: |
-          Write-Host "▶️ Iniciando serviço ${{ env.SERVICE_NAME }}..."
+          Write-Host "Iniciando serviço ${{ env.SERVICE_NAME }}..."
           Start-Service -Name "${{ env.SERVICE_NAME }}"
           Start-Sleep -Seconds 5
 
@@ -141,18 +141,18 @@ jobs:
           Write-Host "Status do serviço: $($service.Status)"
 
           if ($service.Status -eq 'Running') {
-            Write-Host "✅ Serviço iniciado com sucesso!" -ForegroundColor Green
+            Write-Host "Serviço iniciado com sucesso!" -ForegroundColor Green
           } else {
-            Write-Host "⚠️ Serviço não está rodando. Status: $($service.Status)" -ForegroundColor Yellow
+            Write-Host "Serviço não está rodando. Status: $($service.Status)" -ForegroundColor Yellow
             Write-Host "Tentando iniciar novamente..."
             Start-Service -Name "${{ env.SERVICE_NAME }}" -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 3
             
             $service = Get-Service -Name "${{ env.SERVICE_NAME }}"
             if ($service.Status -eq 'Running') {
-              Write-Host "✅ Serviço iniciado na segunda tentativa!"
+              Write-Host "Serviço iniciado na segunda tentativa!"
             } else {
-              Write-Host "❌ Erro ao iniciar o serviço"
+              Write-Host "Erro ao iniciar o serviço"
               Write-Host "Verifique os logs do Event Viewer para mais detalhes"
               exit 1
             }
@@ -160,7 +160,7 @@ jobs:
 
       - name: Verificar logs do Event Viewer
         run: |
-          Write-Host "`n📋 Últimos 5 eventos do serviço:"
+          Write-Host "`Últimos 5 eventos do serviço:"
           Get-EventLog -LogName Application -Source "${{ env.SERVICE_NAME }}" -Newest 5 -ErrorAction SilentlyContinue | 
             Format-Table TimeGenerated, EntryType, Message -AutoSize
         continue-on-error: true
