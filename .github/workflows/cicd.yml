@@ -12,6 +12,7 @@ env:
   DOTNET_VERSION: "8.0.x"
   PROJECT_PATH: "./WorkerServiceTest/WorkerServiceTest.csproj"
   PUBLISH_PATH: "./publish"
+  SERVICE_PATH: "C:\\Services\\WorkerServiceTest"
 
 jobs:
   build-and-test:
@@ -60,66 +61,119 @@ jobs:
             --runtime win-x64 `
             --self-contained false
 
+      - name: Verificar/Criar diretório de serviço
+        run: |
+          $destPath = "${{ env.SERVICE_PATH }}"
+
+          if (-not (Test-Path $destPath)) {
+            Write-Host "📁 Criando diretório: $destPath"
+            New-Item -ItemType Directory -Path $destPath -Force | Out-Null
+            Write-Host "✅ Diretório criado!"
+          } else {
+            Write-Host "✅ Diretório já existe: $destPath"
+          }
+
       - name: Verificar se serviço existe
         id: check-service
         run: |
           $service = Get-Service -Name "${{ env.SERVICE_NAME }}" -ErrorAction SilentlyContinue
           if ($service) {
             Write-Host "✅ Serviço '${{ env.SERVICE_NAME }}' encontrado!"
+            Write-Host "Status atual: $($service.Status)"
             echo "SERVICE_EXISTS=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "⚠️ ATENÇÃO: Serviço '${{ env.SERVICE_NAME }}' NÃO existe!"
-            Write-Host ""
-            Write-Host "Execute o script de instalação primeiro como Administrador:"
-            Write-Host "  .\install-service-initial.ps1"
-            Write-Host ""
-            Write-Host "Ou crie o serviço manualmente:"
-            Write-Host "  New-Service -Name 'WorkerServiceTest' -BinaryPathName 'C:\Services\WorkerServiceTest\WorkerServiceTest.exe' -StartupType Automatic"
-            Write-Host ""
+            Write-Host "⚠️ Serviço '${{ env.SERVICE_NAME }}' não existe"
+            Write-Host "📝 Será criado automaticamente..."
             echo "SERVICE_EXISTS=false" >> $env:GITHUB_OUTPUT
-            exit 1
           }
 
-      - name: Parar serviço Windows
+      - name: Parar serviço (se existir)
         if: steps.check-service.outputs.SERVICE_EXISTS == 'true'
         run: |
-          Write-Host "Parando serviço ${{ env.SERVICE_NAME }}..."
+          Write-Host "⏹️ Parando serviço ${{ env.SERVICE_NAME }}..."
           Stop-Service -Name "${{ env.SERVICE_NAME }}" -Force
           Start-Sleep -Seconds 5
           Write-Host "✅ Serviço parado!"
 
       - name: Copiar arquivos para diretório de produção
         run: |
-          $destPath = "C:\Services\${{ env.SERVICE_NAME }}"
+          $destPath = "${{ env.SERVICE_PATH }}"
 
-          if (-not (Test-Path $destPath)) {
-            New-Item -ItemType Directory -Path $destPath -Force
-            Write-Host "Diretório criado: $destPath"
-          }
-
-          Write-Host "Copiando arquivos para $destPath..."
+          Write-Host "📦 Copiando arquivos para $destPath..."
           Copy-Item -Path "${{ env.PUBLISH_PATH }}\*" -Destination $destPath -Recurse -Force
           Write-Host "✅ Arquivos copiados com sucesso!"
 
+      - name: Criar serviço Windows (se não existir)
+        if: steps.check-service.outputs.SERVICE_EXISTS == 'false'
+        run: |
+          $serviceName = "${{ env.SERVICE_NAME }}"
+          $exePath = "${{ env.SERVICE_PATH }}\WorkerServiceTest.exe"
+
+          Write-Host "🔧 Criando serviço Windows..."
+          Write-Host "Nome: $serviceName"
+          Write-Host "Executável: $exePath"
+
+          try {
+            $service = New-Service `
+              -Name $serviceName `
+              -BinaryPathName $exePath `
+              -DisplayName "Worker Service Test" `
+              -Description "Worker Service .NET 8 com CI/CD automático" `
+              -StartupType Automatic `
+              -ErrorAction Stop
+            
+            Write-Host "✅ Serviço criado com sucesso!"
+          } catch {
+            Write-Host "❌ Erro ao criar o serviço:" -ForegroundColor Red
+            Write-Host $_.Exception.Message -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Verifique se o runner tem permissões de administrador" -ForegroundColor Yellow
+            exit 1
+          }
+
       - name: Iniciar serviço
         run: |
-          Write-Host "Iniciando serviço ${{ env.SERVICE_NAME }}..."
+          Write-Host "▶️ Iniciando serviço ${{ env.SERVICE_NAME }}..."
           Start-Service -Name "${{ env.SERVICE_NAME }}"
-          Start-Sleep -Seconds 3
+          Start-Sleep -Seconds 5
 
           $service = Get-Service -Name "${{ env.SERVICE_NAME }}"
           Write-Host "Status do serviço: $($service.Status)"
 
           if ($service.Status -eq 'Running') {
-            Write-Host "✅ Serviço iniciado com sucesso!"
+            Write-Host "✅ Serviço iniciado com sucesso!" -ForegroundColor Green
           } else {
-            Write-Host "❌ Erro ao iniciar o serviço"
-            exit 1
+            Write-Host "⚠️ Serviço não está rodando. Status: $($service.Status)" -ForegroundColor Yellow
+            Write-Host "Tentando iniciar novamente..."
+            Start-Service -Name "${{ env.SERVICE_NAME }}" -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 3
+            
+            $service = Get-Service -Name "${{ env.SERVICE_NAME }}"
+            if ($service.Status -eq 'Running') {
+              Write-Host "✅ Serviço iniciado na segunda tentativa!"
+            } else {
+              Write-Host "❌ Erro ao iniciar o serviço"
+              Write-Host "Verifique os logs do Event Viewer para mais detalhes"
+              exit 1
+            }
           }
 
       - name: Verificar logs do Event Viewer
         run: |
-          Write-Host "Últimos 5 eventos do serviço:"
+          Write-Host "`n📋 Últimos 5 eventos do serviço:"
           Get-EventLog -LogName Application -Source "${{ env.SERVICE_NAME }}" -Newest 5 -ErrorAction SilentlyContinue | 
             Format-Table TimeGenerated, EntryType, Message -AutoSize
         continue-on-error: true
+
+      - name: Resumo do Deploy
+        run: |
+          Write-Host "`n========================================" -ForegroundColor Cyan
+          Write-Host "   DEPLOY CONCLUÍDO COM SUCESSO!" -ForegroundColor Green
+          Write-Host "========================================" -ForegroundColor Cyan
+
+          $service = Get-Service -Name "${{ env.SERVICE_NAME }}"
+          Write-Host "Serviço: $($service.DisplayName)" -ForegroundColor White
+          Write-Host "Status: $($service.Status)" -ForegroundColor Green
+          Write-Host "Startup: $($service.StartType)" -ForegroundColor White
+          Write-Host "Localização: ${{ env.SERVICE_PATH }}" -ForegroundColor White
+          Write-Host "========================================" -ForegroundColor Cyan
