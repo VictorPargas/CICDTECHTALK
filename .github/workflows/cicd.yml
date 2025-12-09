@@ -21,14 +21,13 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      # Verificar se .NET está instalado (sem tentar instalar)
+      # Verificar se .NET está instalado
       - name: Verificar .NET instalado
         run: |
           Write-Host "Verificando instalação do .NET..."
           dotnet --version
           dotnet --list-sdks
           Write-Host "✅ .NET está disponível!"
-        shell: pwsh
 
       - name: Restaurar dependências
         run: dotnet restore ${{ env.PROJECT_PATH }}
@@ -53,7 +52,6 @@ jobs:
         run: |
           Write-Host "Verificando instalação do .NET..."
           dotnet --version
-        shell: pwsh
 
       - name: Publish aplicação
         run: |
@@ -62,7 +60,6 @@ jobs:
             --output ${{ env.PUBLISH_PATH }} `
             --runtime win-x64 `
             --self-contained false
-        shell: pwsh
 
       - name: Parar serviço Windows (se existir)
         run: |
@@ -74,7 +71,6 @@ jobs:
           } else {
             Write-Host "Serviço ${{ env.SERVICE_NAME }} não existe ainda."
           }
-        shell: pwsh
 
       - name: Copiar arquivos para diretório de produção
         run: |
@@ -88,7 +84,6 @@ jobs:
           Write-Host "Copiando arquivos para $destPath..."
           Copy-Item -Path "${{ env.PUBLISH_PATH }}\*" -Destination $destPath -Recurse -Force
           Write-Host "Arquivos copiados com sucesso!"
-        shell: pwsh
 
       - name: Instalar/Atualizar serviço Windows
         run: |
@@ -108,7 +103,6 @@ jobs:
               -Description "Serviço de teste Worker .NET 8" `
               -StartupType Automatic
           }
-        shell: pwsh
 
       - name: Iniciar serviço
         run: |
@@ -125,12 +119,10 @@ jobs:
             Write-Host "❌ Erro ao iniciar o serviço"
             exit 1
           }
-        shell: pwsh
 
       - name: Verificar logs do Event Viewer
         run: |
           Write-Host "Últimos 5 eventos do serviço:"
           Get-EventLog -LogName Application -Source "${{ env.SERVICE_NAME }}" -Newest 5 -ErrorAction SilentlyContinue | 
             Format-Table TimeGenerated, EntryType, Message -AutoSize
-        shell: pwsh
         continue-on-error: true
