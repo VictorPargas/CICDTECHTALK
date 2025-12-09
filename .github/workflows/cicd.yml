@@ -93,11 +93,11 @@ jobs:
 
           if ($service) {
             Write-Host "Serviço já existe. Atualizando configurações..."
-            sc.exe config $serviceName binPath= $exePath
+            sc.exe config $serviceName binPath= "\"$exePath\""
           } else {
             Write-Host "Criando novo serviço..."
             New-Service -Name $serviceName `
-              -BinaryPathName $exePath `
+              -BinaryPathName "\"$exePath\"" `
               -DisplayName "Worker Service Test" `
               -Description "Serviço de teste Worker .NET 8" `
               -StartupType Automatic
