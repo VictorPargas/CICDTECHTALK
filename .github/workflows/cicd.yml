@@ -58,7 +58,10 @@ jobs:
           dotnet publish "${{ env.PROJECT_PATH }}" `
             --configuration Release `
             --output ${{ env.PUBLISH_PATH }} `
-            --self-contained false
+            --runtime win-x64 `
+            --self-contained true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true
 
       - name: Verificar se servico existe
         id: check-service
