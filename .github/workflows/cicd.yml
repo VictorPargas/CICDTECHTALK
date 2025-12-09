@@ -10,7 +10,7 @@ on:
 env:
   SERVICE_NAME: WorkerServiceTest
   DOTNET_VERSION: "8.0.x"
-  PROJECT_PATH: "./WorkerServiceTest/WorkerServiceTest.csproj" # ✅ Caminho correto!
+  PROJECT_PATH: "./WorkerServiceTest/WorkerServiceTest.csproj"
   PUBLISH_PATH: "./publish"
 
 jobs:
@@ -60,16 +60,33 @@ jobs:
             --runtime win-x64 `
             --self-contained false
 
-      - name: Parar serviço Windows (se existir)
+      - name: Verificar se serviço existe
+        id: check-service
         run: |
           $service = Get-Service -Name "${{ env.SERVICE_NAME }}" -ErrorAction SilentlyContinue
           if ($service) {
-            Write-Host "Parando serviço ${{ env.SERVICE_NAME }}..."
-            Stop-Service -Name "${{ env.SERVICE_NAME }}" -Force
-            Start-Sleep -Seconds 5
+            Write-Host "✅ Serviço '${{ env.SERVICE_NAME }}' encontrado!"
+            echo "SERVICE_EXISTS=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "Serviço ${{ env.SERVICE_NAME }} não existe ainda."
+            Write-Host "⚠️ ATENÇÃO: Serviço '${{ env.SERVICE_NAME }}' NÃO existe!"
+            Write-Host ""
+            Write-Host "Execute o script de instalação primeiro como Administrador:"
+            Write-Host "  .\install-service-initial.ps1"
+            Write-Host ""
+            Write-Host "Ou crie o serviço manualmente:"
+            Write-Host "  New-Service -Name 'WorkerServiceTest' -BinaryPathName 'C:\Services\WorkerServiceTest\WorkerServiceTest.exe' -StartupType Automatic"
+            Write-Host ""
+            echo "SERVICE_EXISTS=false" >> $env:GITHUB_OUTPUT
+            exit 1
           }
+
+      - name: Parar serviço Windows
+        if: steps.check-service.outputs.SERVICE_EXISTS == 'true'
+        run: |
+          Write-Host "Parando serviço ${{ env.SERVICE_NAME }}..."
+          Stop-Service -Name "${{ env.SERVICE_NAME }}" -Force
+          Start-Sleep -Seconds 5
+          Write-Host "✅ Serviço parado!"
 
       - name: Copiar arquivos para diretório de produção
         run: |
@@ -82,26 +99,7 @@ jobs:
 
           Write-Host "Copiando arquivos para $destPath..."
           Copy-Item -Path "${{ env.PUBLISH_PATH }}\*" -Destination $destPath -Recurse -Force
-          Write-Host "Arquivos copiados com sucesso!"
-
-      - name: Instalar/Atualizar serviço Windows
-        run: |
-          $serviceName = "${{ env.SERVICE_NAME }}"
-          $exePath = "C:\Services\${{ env.SERVICE_NAME }}\WorkerServiceTest.exe"
-
-          $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-
-          if ($service) {
-            Write-Host "Serviço já existe. Atualizando configurações..."
-            sc.exe config $serviceName binPath= "\"$exePath\""
-          } else {
-            Write-Host "Criando novo serviço..."
-            New-Service -Name $serviceName `
-              -BinaryPathName "\"$exePath\"" `
-              -DisplayName "Worker Service Test" `
-              -Description "Serviço de teste Worker .NET 8" `
-              -StartupType Automatic
-          }
+          Write-Host "✅ Arquivos copiados com sucesso!"
 
       - name: Iniciar serviço
         run: |
