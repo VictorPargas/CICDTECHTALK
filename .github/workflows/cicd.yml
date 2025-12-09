@@ -58,7 +58,6 @@ jobs:
           dotnet publish "${{ env.PROJECT_PATH }}" `
             --configuration Release `
             --output ${{ env.PUBLISH_PATH }} `
-            --runtime win-x64 `
             --self-contained false
 
       - name: Verificar se servico existe
