@@ -1,0 +1,131 @@
+name: CI/CD Worker Service
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  SERVICE_NAME: WorkerServiceTest
+  DOTNET_VERSION: "8.0.x"
+  PROJECT_PATH: "./WorkerServiceTest.csproj"
+  PUBLISH_PATH: "./publish"
+
+jobs:
+  build-and-test:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restaurar dependências
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Build
+        run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+      - name: Test (se houver testes)
+        run: dotnet test ${{ env.PROJECT_PATH }} --configuration Release --no-build --verbosity normal
+        continue-on-error: true
+
+  deploy:
+    needs: build-and-test
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish aplicação
+        run: |
+          dotnet publish ${{ env.PROJECT_PATH }} `
+            --configuration Release `
+            --output ${{ env.PUBLISH_PATH }} `
+            --runtime win-x64 `
+            --self-contained false
+        shell: pwsh
+
+      - name: Parar serviço Windows (se existir)
+        run: |
+          $service = Get-Service -Name "${{ env.SERVICE_NAME }}" -ErrorAction SilentlyContinue
+          if ($service) {
+            Write-Host "Parando serviço ${{ env.SERVICE_NAME }}..."
+            Stop-Service -Name "${{ env.SERVICE_NAME }}" -Force
+            Start-Sleep -Seconds 5
+          } else {
+            Write-Host "Serviço ${{ env.SERVICE_NAME }} não existe ainda."
+          }
+        shell: pwsh
+
+      - name: Copiar arquivos para diretório de produção
+        run: |
+          $destPath = "C:\Services\${{ env.SERVICE_NAME }}"
+
+          if (-not (Test-Path $destPath)) {
+            New-Item -ItemType Directory -Path $destPath -Force
+            Write-Host "Diretório criado: $destPath"
+          }
+
+          Write-Host "Copiando arquivos para $destPath..."
+          Copy-Item -Path "${{ env.PUBLISH_PATH }}\*" -Destination $destPath -Recurse -Force
+          Write-Host "Arquivos copiados com sucesso!"
+        shell: pwsh
+
+      - name: Instalar/Atualizar serviço Windows
+        run: |
+          $serviceName = "${{ env.SERVICE_NAME }}"
+          $exePath = "C:\Services\${{ env.SERVICE_NAME }}\WorkerServiceTest.exe"
+
+          $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+
+          if ($service) {
+            Write-Host "Serviço já existe. Atualizando configurações..."
+            sc.exe config $serviceName binPath= $exePath
+          } else {
+            Write-Host "Criando novo serviço..."
+            New-Service -Name $serviceName `
+              -BinaryPathName $exePath `
+              -DisplayName "Worker Service Test" `
+              -Description "Serviço de teste Worker .NET 8" `
+              -StartupType Automatic
+          }
+        shell: pwsh
+
+      - name: Iniciar serviço
+        run: |
+          Write-Host "Iniciando serviço ${{ env.SERVICE_NAME }}..."
+          Start-Service -Name "${{ env.SERVICE_NAME }}"
+          Start-Sleep -Seconds 3
+
+          $service = Get-Service -Name "${{ env.SERVICE_NAME }}"
+          Write-Host "Status do serviço: $($service.Status)"
+
+          if ($service.Status -eq 'Running') {
+            Write-Host "✅ Serviço iniciado com sucesso!"
+          } else {
+            Write-Host "❌ Erro ao iniciar o serviço"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Verificar logs do Event Viewer
+        run: |
+          Write-Host "Últimos 5 eventos do serviço:"
+          Get-EventLog -LogName Application -Source "${{ env.SERVICE_NAME }}" -Newest 5 -ErrorAction SilentlyContinue | 
+            Format-Table TimeGenerated, EntryType, Message -AutoSize
+        shell: pwsh
+        continue-on-error: true
