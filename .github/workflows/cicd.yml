@@ -21,10 +21,14 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+      # Verificar se .NET está instalado (sem tentar instalar)
+      - name: Verificar .NET instalado
+        run: |
+          Write-Host "Verificando instalação do .NET..."
+          dotnet --version
+          dotnet --list-sdks
+          Write-Host "✅ .NET está disponível!"
+        shell: pwsh
 
       - name: Restaurar dependências
         run: dotnet restore ${{ env.PROJECT_PATH }}
@@ -45,10 +49,11 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Verificar .NET instalado
+        run: |
+          Write-Host "Verificando instalação do .NET..."
+          dotnet --version
+        shell: pwsh
 
       - name: Publish aplicação
         run: |
