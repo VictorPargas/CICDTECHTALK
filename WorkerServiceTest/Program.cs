@@ -10,8 +10,8 @@ builder.Services.AddHostedService<Worker>();
 
 builder.Services.AddWindowsService(options =>
 {
-    options.ServiceName = "Worker Service Test";
-});ffd
+    options.ServiceName = "Worker Service Test teste teste";
+});
 
 var host = builder.Build();
 host.Run();
